@@ -1,0 +1,1257 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Polymarket BTC Weekly Hit-map</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #08141b;
+      --panel: rgba(7, 19, 27, 0.82);
+      --panel-border: rgba(121, 154, 176, 0.2);
+      --text: #e6f1f7;
+      --muted: #89a5b8;
+      --grid: rgba(121, 154, 176, 0.12);
+      --up-candle: #d5f06a;
+      --down-candle: #ff8a5b;
+      --up-heat: 15, 209, 255;
+      --down-heat: 255, 110, 64;
+      --shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'Space Grotesk', sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(26, 83, 92, 0.28), transparent 30%),
+        radial-gradient(circle at top right, rgba(255, 138, 91, 0.18), transparent 35%),
+        linear-gradient(180deg, #0a1a22 0%, #08141b 48%, #050c11 100%);
+    }
+
+    .shell {
+      width: min(1440px, calc(100vw - 32px));
+      margin: 24px auto;
+      padding: 20px;
+      border: 1px solid var(--panel-border);
+      border-radius: 24px;
+      background: var(--panel);
+      backdrop-filter: blur(12px);
+      box-shadow: var(--shadow);
+    }
+
+    .topbar {
+      display: flex;
+      gap: 16px;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 18px;
+    }
+
+    .title h1 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 46px);
+      line-height: 0.94;
+      letter-spacing: -0.04em;
+    }
+
+    .title p, .tooltip, .empty {
+      color: var(--muted);
+    }
+
+    .title p {
+      margin: 10px 0 0;
+      max-width: 760px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .event-select {
+      min-width: 220px;
+      max-width: 280px;
+      border: 1px solid var(--panel-border);
+      background: rgba(255,255,255,0.03);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 12px;
+      font: inherit;
+    }
+
+    button {
+      border: 1px solid var(--panel-border);
+      background: rgba(255,255,255,0.03);
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 999px;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    button.active {
+      background: rgba(213, 240, 106, 0.14);
+      border-color: rgba(213, 240, 106, 0.45);
+      color: #f1f9cb;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .card {
+      padding: 14px 16px;
+      border-radius: 18px;
+      border: 1px solid var(--panel-border);
+      background: rgba(255,255,255,0.03);
+    }
+
+    .card .label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .card .value {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: clamp(18px, 2vw, 26px);
+    }
+
+    .card .value.nowrap {
+      white-space: nowrap;
+      font-size: clamp(14px, 1.35vw, 20px);
+    }
+
+    .chart-wrap {
+      position: relative;
+      border-radius: 22px;
+      overflow: hidden;
+      border: 1px solid var(--panel-border);
+      background:
+        linear-gradient(180deg, rgba(17, 42, 57, 0.55) 0%, rgba(8, 20, 27, 0.76) 100%);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: min(72vh, 820px);
+    }
+
+    .tooltip {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 260px;
+      padding: 12px;
+      border-radius: 16px;
+      background: rgba(5, 13, 18, 0.88);
+      border: 1px solid var(--panel-border);
+      backdrop-filter: blur(8px);
+      font-size: 13px;
+      line-height: 1.45;
+      pointer-events: none;
+      box-shadow: var(--shadow);
+      opacity: 0;
+      transform: translate(16px, 16px);
+      transition: opacity 120ms ease;
+    }
+
+    .tooltip.visible {
+      opacity: 1;
+    }
+
+    .chart-refresh {
+      position: absolute;
+      right: 10px;
+      top: 10px;
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      border: 1px solid var(--panel-border);
+      background: rgba(5, 13, 18, 0.86);
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      font-size: 16px;
+      cursor: pointer;
+      z-index: 3;
+      transition: transform 140ms ease, opacity 140ms ease;
+    }
+
+    .chart-refresh:hover {
+      transform: rotate(20deg);
+    }
+
+    .chart-refresh:disabled {
+      opacity: 0.45;
+      cursor: default;
+      transform: none;
+    }
+
+    .loading {
+      position: absolute;
+      left: 16px;
+      right: 16px;
+      bottom: 16px;
+      z-index: 3;
+      border-radius: 12px;
+      border: 1px solid var(--panel-border);
+      background: rgba(5, 13, 18, 0.88);
+      backdrop-filter: blur(8px);
+      padding: 10px 12px;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(8px);
+      transition: opacity 180ms ease, transform 180ms ease;
+    }
+
+    .loading.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .loading .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+
+    .loading .bar {
+      width: 100%;
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(121, 154, 176, 0.18);
+      overflow: hidden;
+    }
+
+    .loading .bar > i {
+      display: block;
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #30c7e8 0%, #d5f06a 100%);
+      transition: width 160ms ease;
+    }
+
+    .tooltip h2 {
+      margin: 0 0 12px;
+      font-size: 14px;
+      color: var(--text);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .tooltip .section {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(121, 154, 176, 0.15);
+    }
+
+    .tooltip .rows {
+      display: grid;
+      gap: 6px;
+    }
+
+    .tooltip .cell-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 9px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(121, 154, 176, 0.12);
+    }
+
+    .tooltip strong, .tooltip .mono {
+      color: var(--text);
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    .empty {
+      padding: 48px 16px;
+      text-align: center;
+    }
+
+    @media (max-width: 900px) {
+      .topbar { flex-direction: column; }
+      .controls { justify-content: flex-start; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      canvas { height: 62vh; }
+    }
+
+    @media (max-width: 640px) {
+      .shell { width: calc(100vw - 16px); margin: 8px auto; padding: 14px; border-radius: 18px; }
+      .stats { grid-template-columns: 1fr; }
+      .chart-wrap { padding-top: 0; }
+      canvas { height: 56vh; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="topbar">
+      <div class="title">
+        <h1>BTC Weekly Hit Heatmap</h1>
+        <p>Polymarket weekly barrier-hit probabilities projected onto the BTC price axis. Each band is an independent hit probability, not a normalized distribution.</p>
+      </div>
+      <div class="controls" id="controls">
+        <select id="eventSelect" class="event-select"></select>
+        <button data-filter="all" class="active">All</button>
+        <button data-filter="up">Up Only</button>
+        <button data-filter="down">Down Only</button>
+      </div>
+    </section>
+
+    <section class="stats" id="stats"></section>
+
+    <section class="chart-wrap" id="chartWrap">
+      <canvas id="chart" width="1400" height="860"></canvas>
+      <button id="refreshBtn" class="chart-refresh" type="button" title="Refresh">↻</button>
+      <div class="tooltip" id="tooltip">Loading local JSON…</div>
+      <div class="loading" id="loading">
+        <div class="row">
+          <span id="loadingText">Loading…</span>
+          <span id="loadingPct">0%</span>
+        </div>
+        <div class="bar"><i id="loadingBar"></i></div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    const state = {
+      filter: 'all',
+      dataset: null,
+      currentEventSlug: null,
+      historyOptionsLoaded: false,
+      historyOptionsLoading: false,
+      hoverIndex: null,
+      hoverX: null,
+      hoverY: null,
+      hoverTs: null,
+    };
+    const GAMMA_BASE = 'https://gamma-api.polymarket.com';
+    const CLOB_BASE = 'https://clob.polymarket.com';
+    const BINANCE_BASE = 'https://api.binance.com';
+    const DEFAULT_EVENT_SLUG = 'what-price-will-bitcoin-hit-april-13-19';
+    const MONTH_NAMES = [
+      'january', 'february', 'march', 'april', 'may', 'june',
+      'july', 'august', 'september', 'october', 'november', 'december',
+    ];
+
+    const chart = document.getElementById('chart');
+    const ctx = chart.getContext('2d');
+    const tooltip = document.getElementById('tooltip');
+    const statsEl = document.getElementById('stats');
+    const eventSelectEl = document.getElementById('eventSelect');
+    const refreshBtnEl = document.getElementById('refreshBtn');
+    const chartWrap = document.getElementById('chartWrap');
+    const loadingEl = document.getElementById('loading');
+    const loadingTextEl = document.getElementById('loadingText');
+    const loadingPctEl = document.getElementById('loadingPct');
+    const loadingBarEl = document.getElementById('loadingBar');
+
+    function setLoading(message, progress, visible = true) {
+      const pct = Math.max(0, Math.min(100, Math.round(progress)));
+      loadingTextEl.textContent = message;
+      loadingPctEl.textContent = `${pct}%`;
+      loadingBarEl.style.width = `${pct}%`;
+      loadingEl.classList.toggle('visible', visible);
+    }
+
+    function getMarketBands(markets) {
+      const grouped = { up: [], down: [] };
+      for (const market of markets) {
+        if (!Number.isFinite(market.threshold)) continue;
+        if (market.direction !== 'up' && market.direction !== 'down') continue;
+        grouped[market.direction].push(market);
+      }
+
+      const bands = {};
+      for (const direction of ['up', 'down']) {
+        const sorted = [...grouped[direction]].sort((a, b) => a.threshold - b.threshold);
+        if (!sorted.length) continue;
+        const defaultStep = sorted.length > 1 ? (sorted[1].threshold - sorted[0].threshold) : 2000;
+        for (let i = 0; i < sorted.length; i += 1) {
+          const market = sorted[i];
+          const prev = sorted[i - 1]?.threshold;
+          const next = sorted[i + 1]?.threshold;
+          const step = next != null ? (next - market.threshold) : (market.threshold - (prev ?? market.threshold - defaultStep));
+
+          if (direction === 'up') {
+            bands[market.market_slug] = {
+              lower: market.threshold,
+              upper: market.threshold + (step || defaultStep),
+            };
+          } else {
+            bands[market.market_slug] = {
+              lower: market.threshold - (step || defaultStep),
+              upper: market.threshold,
+            };
+          }
+        }
+      }
+      return bands;
+    }
+
+    function getChartMetrics(rect, dataset) {
+      const padding = { top: 24, right: 74, bottom: 34, left: 18 };
+      const innerWidth = rect.width - padding.left - padding.right;
+      const innerHeight = rect.height - padding.top - padding.bottom;
+      const candles = dataset.candles;
+      const marketBands = getMarketBands(getActiveMarkets());
+      const bandValues = Object.values(marketBands);
+      const priceMin = Math.min(
+        ...candles.map(c => c.low),
+        ...(bandValues.length ? bandValues.map(b => b.lower) : [candles[0].low])
+      );
+      const priceMax = Math.max(
+        ...candles.map(c => c.high),
+        ...(bandValues.length ? bandValues.map(b => b.upper) : [candles[0].high])
+      );
+      const xMin = parseIsoToTs(dataset.event.startDate);
+      const xMax = parseIsoToTs(dataset.event.endDate);
+      const xScale = ts => padding.left + ((ts - xMin) / (xMax - xMin || 1)) * innerWidth;
+      const yScale = price => padding.top + (1 - ((price - priceMin) / (priceMax - priceMin || 1))) * innerHeight;
+      const yInvert = y => priceMin + (1 - ((y - padding.top) / (innerHeight || 1))) * (priceMax - priceMin);
+      return { padding, innerWidth, innerHeight, candles, priceMin, priceMax, xMin, xMax, xScale, yScale, yInvert };
+    }
+
+    function parseIsoToTs(value) {
+      return Math.floor(new Date(value).getTime() / 1000);
+    }
+
+    function formatRangeLabel(startDate, endDate) {
+      const toDate = value => {
+        const d = new Date(value || '');
+        if (Number.isNaN(d.getTime())) return '';
+        const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const dd = String(d.getUTCDate()).padStart(2, '0');
+        return `${mm}-${dd}`;
+      };
+      const s = toDate(startDate);
+      const e = toDate(endDate || startDate);
+      return s && e ? `${s} ~ ${e}` : (startDate || '').slice(0, 10);
+    }
+
+    function mondaySlugForDate(dateUtc) {
+      const endDate = new Date(dateUtc.getTime() + 6 * 86400000);
+      return `what-price-will-bitcoin-hit-${MONTH_NAMES[dateUtc.getUTCMonth()]}-${dateUtc.getUTCDate()}-${endDate.getUTCDate()}`;
+    }
+
+    function parseJsonishList(value) {
+      if (Array.isArray(value)) return value;
+      if (typeof value === 'string') {
+        const text = value.trim();
+        if (!text) return [];
+        try {
+          return JSON.parse(text);
+        } catch {
+          return [];
+        }
+      }
+      return [];
+    }
+
+    function parseThresholdAndDirection(text) {
+      if (!text) return { direction: null, threshold: null };
+      const lower = text.toLowerCase();
+      let direction = null;
+      if (text.includes('↑') || lower.includes('reach') || lower.includes('hit') || lower.includes('above')) {
+        direction = 'up';
+      }
+      if (text.includes('↓') || lower.includes('dip') || lower.includes('drop') || lower.includes('below')) {
+        direction = 'down';
+      }
+      const kMatch = text.match(/(\d[\d,]*(?:\.\d+)?)\s*k\b/i);
+      if (kMatch) {
+        return { direction, threshold: Math.round(parseFloat(kMatch[1].replaceAll(',', '')) * 1000) };
+      }
+      const nMatch = text.match(/\$?(\d[\d,]*)/);
+      if (nMatch) {
+        return { direction, threshold: Number(nMatch[1].replaceAll(',', '')) };
+      }
+      return { direction, threshold: null };
+    }
+
+    function inferYesNoTokenIds(outcomes, tokenIds) {
+      const yesIndex = outcomes.findIndex(x => String(x).toLowerCase() === 'yes');
+      const noIndex = outcomes.findIndex(x => String(x).toLowerCase() === 'no');
+      return {
+        yes: yesIndex >= 0 ? tokenIds[yesIndex] : null,
+        no: noIndex >= 0 ? tokenIds[noIndex] : null,
+      };
+    }
+
+    async function fetchJson(url, retries = 3) {
+      let lastError = null;
+      for (let attempt = 1; attempt <= retries; attempt += 1) {
+        try {
+          const resp = await fetch(url, { headers: { Accept: 'application/json' } });
+          if (!resp.ok) {
+            throw new Error(`HTTP ${resp.status} for ${url}`);
+          }
+          return await resp.json();
+        } catch (error) {
+          lastError = error;
+          if (attempt < retries) {
+            await new Promise(resolve => setTimeout(resolve, 300 * attempt));
+          }
+        }
+      }
+      throw lastError;
+    }
+
+    async function fetchEventBySlug(slug) {
+      return fetchJson(`${GAMMA_BASE}/events/slug/${encodeURIComponent(slug)}`);
+    }
+
+    async function fetchWeeklyHitEvents(onProgress = () => {}) {
+      const weekCount = 80;
+      const concurrency = 8;
+      const now = new Date();
+      const utcDay = now.getUTCDay();
+      const mondayShift = (utcDay + 6) % 7; // Monday=0 ... Sunday=6
+      const currentMonday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - mondayShift));
+      const weekStarts = Array.from({ length: weekCount }, (_, i) => new Date(currentMonday.getTime() - i * 7 * 86400000));
+      const slugs = weekStarts.map(mondaySlugForDate);
+      const deduped = new Map();
+
+      for (let i = 0; i < slugs.length; i += concurrency) {
+        const batch = slugs.slice(i, i + concurrency);
+        onProgress(10 + (i / slugs.length) * 35, `Scanning weekly events ${Math.min(i + batch.length, slugs.length)}/${slugs.length}`);
+        const rows = await Promise.all(batch.map(async slug => {
+          try {
+            const event = await fetchEventBySlug(slug);
+            return event;
+          } catch {
+            return null;
+          }
+        }));
+        for (const event of rows) {
+          if (!event?.slug) continue;
+          const title = String(event.title || '').toLowerCase();
+          if (title.startsWith('what price will bitcoin hit ')) {
+            deduped.set(event.slug, event);
+          }
+        }
+      }
+
+      const toTs = value => {
+        const ms = Date.parse(value || '');
+        return Number.isFinite(ms) ? Math.floor(ms / 1000) : 0;
+      };
+      onProgress(45, `Weekly events ready: ${deduped.size}`);
+      return [...deduped.values()].sort((a, b) => toTs(b.startDate || b.createdAt) - toTs(a.startDate || a.createdAt));
+    }
+
+    async function resolveLatestEventSlugQuick() {
+      const now = new Date();
+      const utcDay = now.getUTCDay();
+      const mondayShift = (utcDay + 6) % 7;
+      const currentMonday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - mondayShift));
+      const candidates = Array.from({ length: 8 }, (_, i) => new Date(currentMonday.getTime() - i * 7 * 86400000))
+        .map(mondaySlugForDate);
+
+      for (const slug of candidates) {
+        try {
+          const event = await fetchEventBySlug(slug);
+          if (String(event?.title || '').toLowerCase().startsWith('what price will bitcoin hit ')) {
+            return slug;
+          }
+        } catch {
+          // try older week
+        }
+      }
+      return DEFAULT_EVENT_SLUG;
+    }
+
+    async function fetchPricesHistory(tokenId, startTs, endTs, interval = '1h', fidelity = 60) {
+      const qs = new URLSearchParams({
+        market: String(tokenId),
+        startTs: String(startTs),
+        endTs: String(endTs),
+        interval,
+        fidelity: String(fidelity),
+      });
+      const data = await fetchJson(`${CLOB_BASE}/prices-history?${qs.toString()}`);
+      return Array.isArray(data.history) ? data.history.map(p => ({ t: Number(p.t), p: Number(p.p) })) : [];
+    }
+
+    async function fetchBinanceKlines(symbol, interval, startTs, endTs) {
+      const qs = new URLSearchParams({
+        symbol,
+        interval,
+        startTime: String(startTs * 1000),
+        endTime: String(endTs * 1000),
+        limit: '1000',
+      });
+      const rows = await fetchJson(`${BINANCE_BASE}/api/v3/klines?${qs.toString()}`);
+      return rows.map(row => ({
+        open_time: Math.floor(Number(row[0]) / 1000),
+        close_time: Math.floor(Number(row[6]) / 1000),
+        open: Number(row[1]),
+        high: Number(row[2]),
+        low: Number(row[3]),
+        close: Number(row[4]),
+        volume: Number(row[5]),
+      }));
+    }
+
+    function bucketizeHistory(history, bucketStarts, bucketSeconds) {
+      const ordered = [...history].sort((a, b) => a.t - b.t);
+      const out = [];
+      let idx = 0;
+      let last = null;
+      for (const ts of bucketStarts) {
+        const end = ts + bucketSeconds;
+        while (idx < ordered.length && ordered[idx].t <= end) {
+          last = ordered[idx].p;
+          idx += 1;
+        }
+        out.push({ ts, probability: last });
+      }
+      return out;
+    }
+
+    function buildHeatmapCells(markets, bucketSeconds) {
+      const marketBands = getMarketBands(markets);
+      const cells = [];
+      for (const market of markets) {
+        const band = marketBands[market.market_slug];
+        if (!band) continue;
+        for (const bucket of market.buckets) {
+          if (bucket.probability == null) continue;
+          cells.push({
+            x0: bucket.ts,
+            x1: bucket.ts + bucketSeconds,
+            y0: band.lower,
+            y1: band.upper,
+            probability: bucket.probability,
+            direction: market.direction,
+            threshold: market.threshold,
+            market_slug: market.market_slug,
+          });
+        }
+      }
+      return cells;
+    }
+
+    async function buildDatasetFromApis(eventSlugInput, onProgress = () => {}) {
+      const params = new URLSearchParams(window.location.search);
+      const eventSlug = eventSlugInput || params.get('event') || DEFAULT_EVENT_SLUG;
+      const symbol = params.get('symbol') || 'BTCUSDT';
+      const interval = params.get('interval') || '1h';
+      const bucketSeconds = interval === '1h' ? 3600 : 60;
+
+      onProgress(50, 'Loading event');
+      const event = await fetchEventBySlug(eventSlug);
+      const startTs = parseIsoToTs(event.startDate);
+      const nowTs = Math.floor(Date.now() / 1000);
+      const endTs = Math.min(parseIsoToTs(event.endDate), nowTs);
+
+      onProgress(58, 'Loading BTC candles');
+      const candles = await fetchBinanceKlines(symbol, interval, startTs, endTs);
+      if (!candles.length) {
+        throw new Error('No Binance candles returned for this event window.');
+      }
+      const bucketStarts = candles.map(c => c.open_time);
+
+      const marketsRaw = event.markets || [];
+      let done = 0;
+      const normalizedMarkets = await Promise.all(marketsRaw.map(async market => {
+        const outcomes = parseJsonishList(market.outcomes).map(String);
+        const outcome_prices = parseJsonishList(market.outcomePrices).map(Number);
+        const tokenIds = parseJsonishList(market.clobTokenIds).map(String);
+        const { direction, threshold } = parseThresholdAndDirection(market.groupItemTitle || market.question || '');
+        const { yes, no } = inferYesNoTokenIds(outcomes, tokenIds);
+        const history = yes ? await fetchPricesHistory(yes, startTs, endTs, interval, 60) : [];
+        const buckets = bucketizeHistory(history, bucketStarts, bucketSeconds);
+        done += 1;
+        onProgress(58 + (done / Math.max(1, marketsRaw.length)) * 38, `Loading market history ${done}/${marketsRaw.length}`);
+        return {
+          market_slug: String(market.slug || ''),
+          question: String(market.question || ''),
+          direction,
+          threshold,
+          outcomes,
+          outcome_prices,
+          yes_token_id: yes,
+          no_token_id: no,
+          buckets,
+        };
+      }));
+
+      const markets = normalizedMarkets
+        .filter(m => (m.direction === 'up' || m.direction === 'down') && Number.isFinite(m.threshold))
+        .sort((a, b) => (a.direction.localeCompare(b.direction) || a.threshold - b.threshold));
+
+      const heatmap_cells = buildHeatmapCells(markets, bucketSeconds);
+      onProgress(97, 'Rendering dataset');
+      return {
+        event: {
+          id: event.id,
+          slug: event.slug,
+          title: event.title,
+          startDate: event.startDate,
+          endDate: event.endDate,
+          active: event.active,
+          closed: event.closed,
+        },
+        series: {
+          symbol,
+          interval,
+          bucketSeconds,
+          bucketCount: bucketStarts.length,
+        },
+        candles,
+        markets,
+        heatmap_cells,
+      };
+    }
+
+    function renderEventOptions(events, selectedSlug) {
+      if (!events.length) {
+        eventSelectEl.innerHTML = `<option value="${DEFAULT_EVENT_SLUG}">${DEFAULT_EVENT_SLUG}</option>`;
+        eventSelectEl.value = DEFAULT_EVENT_SLUG;
+        return;
+      }
+      if (!events.some(event => event.slug === DEFAULT_EVENT_SLUG)) {
+        events = [{ slug: DEFAULT_EVENT_SLUG, title: DEFAULT_EVENT_SLUG, startDate: '' }, ...events];
+      }
+      eventSelectEl.innerHTML = events.map(event => {
+        const label = formatRangeLabel(event.startDate, event.endDate);
+        return `<option value="${event.slug}">${label}</option>`;
+      }).join('');
+      const exists = events.some(event => event.slug === selectedSlug);
+      eventSelectEl.value = exists ? selectedSlug : events[0].slug;
+    }
+
+    function renderCurrentOnlyOption(event) {
+      eventSelectEl.innerHTML = `<option value="${event.slug}">${formatRangeLabel(event.startDate, event.endDate)}</option>`;
+      eventSelectEl.value = event.slug;
+    }
+
+    function pickLatestWeekSlug(events) {
+      if (!events.length) return DEFAULT_EVENT_SLUG;
+      const now = Date.now();
+      const inWindow = events.find(event => {
+        const s = Date.parse(event.startDate || '');
+        const e = Date.parse(event.endDate || '');
+        return Number.isFinite(s) && Number.isFinite(e) && s <= now && now <= e;
+      });
+      if (inWindow?.slug) return inWindow.slug;
+      const past = events
+        .filter(event => Number.isFinite(Date.parse(event.startDate || '')) && Date.parse(event.startDate) <= now)
+        .sort((a, b) => Date.parse(b.startDate) - Date.parse(a.startDate));
+      if (past[0]?.slug) return past[0].slug;
+      return events[0].slug || DEFAULT_EVENT_SLUG;
+    }
+
+    async function reloadForEvent(eventSlug) {
+      try {
+        eventSelectEl.disabled = true;
+        refreshBtnEl.disabled = true;
+        state.dataset = await buildDatasetFromApis(eventSlug, (p, msg) => setLoading(msg, p, true));
+        state.currentEventSlug = state.dataset.event.slug;
+        state.hoverTs = parseIsoToTs(state.dataset.event.startDate);
+        state.hoverIndex = 0;
+        buildStats();
+        updateTooltip();
+        draw();
+        setLoading('Done', 100, true);
+        setTimeout(() => setLoading('Done', 100, false), 350);
+
+        const url = new URL(window.location.href);
+        url.searchParams.set('event', state.currentEventSlug);
+        window.history.replaceState({}, '', url.toString());
+      } catch (error) {
+        chartWrap.innerHTML = `<div class="empty">Failed to load live API data.<br>${String(error)}</div>`;
+        setLoading('Failed', 100, false);
+      } finally {
+        eventSelectEl.disabled = false;
+        refreshBtnEl.disabled = false;
+      }
+    }
+
+    async function ensureHistoryOptionsLoaded() {
+      if (state.historyOptionsLoaded || state.historyOptionsLoading) return;
+      state.historyOptionsLoading = true;
+      try {
+        setLoading('Loading history list', 12, true);
+        const events = await fetchWeeklyHitEvents((p, msg) => setLoading(msg, p, true));
+        renderEventOptions(events, state.currentEventSlug || eventSelectEl.value || DEFAULT_EVENT_SLUG);
+        state.historyOptionsLoaded = true;
+        setLoading('History ready', 100, true);
+        setTimeout(() => setLoading('History ready', 100, false), 250);
+      } catch {
+        // Keep current option only if history fetch fails.
+        setLoading('History unavailable', 100, false);
+      } finally {
+        state.historyOptionsLoading = false;
+      }
+    }
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function getHoverState() {
+      const dataset = state.dataset;
+      if (!dataset || !dataset.candles.length) return null;
+      const candles = dataset.candles;
+      const marketBands = getMarketBands(getActiveMarkets());
+      const fallbackIndex = candles.length - 1;
+      const index = state.hoverIndex == null || state.hoverIndex < 0 ? fallbackIndex : state.hoverIndex;
+      const candle = candles[index];
+      const hoverTs = state.hoverTs == null ? candle.open_time : state.hoverTs;
+      const price = state.hoverY == null ? candle.close : state.hoverY;
+      const activeCells = getActiveCells().filter(cell => {
+        const band = marketBands[cell.market_slug];
+        if (!band) return false;
+        return cell.x0 <= hoverTs && hoverTs < cell.x1 && band.lower <= price && price <= band.upper;
+      });
+      let hoveredCell = activeCells.sort((a, b) => b.probability - a.probability)[0] ?? null;
+      if (!hoveredCell) {
+        const candidates = getActiveMarkets().map(market => {
+          const band = marketBands[market.market_slug];
+          if (!band || !(band.lower <= price && price <= band.upper)) return null;
+          const probability = getEffectiveProbabilityForMarketAtTs(market, hoverTs);
+          if (probability == null) return null;
+          return {
+            market_slug: market.market_slug,
+            direction: market.direction,
+            threshold: market.threshold,
+            probability,
+          };
+        }).filter(Boolean);
+        hoveredCell = candidates.sort((a, b) => b.probability - a.probability)[0] ?? null;
+      }
+      return { index, candle, hoverTs, price, hoveredCell };
+    }
+
+    function getBucketSeconds() {
+      return state.dataset?.series?.bucketSeconds ?? 3600;
+    }
+
+    function getVisibleProbabilities(ts) {
+      return getActiveMarkets().map(market => {
+        const probability = getEffectiveProbabilityForMarketAtTs(market, ts);
+        return {
+          threshold: market.threshold,
+          direction: market.direction,
+          probability,
+          market_slug: market.market_slug,
+        };
+      }).filter(item => item.probability != null)
+        .sort((a, b) => {
+          const rank = direction => (direction === 'down' ? 0 : 1);
+          return rank(a.direction) - rank(b.direction) || a.threshold - b.threshold;
+        });
+    }
+
+    function getEffectiveProbabilityForMarketAtTs(market, ts) {
+      const hitTsBySlug = getHitTsBySlug();
+      const hitTs = hitTsBySlug[market.market_slug];
+      const bucket = market.buckets.find(item => item.ts === ts);
+      if (bucket?.probability != null) {
+        return hitTs != null && ts >= hitTs ? 1 : bucket.probability;
+      }
+
+      const latestBucket = [...market.buckets].reverse().find(item => item.probability != null);
+      const latest = latestBucket?.probability ?? (Array.isArray(market.outcome_prices) ? market.outcome_prices[0] : null);
+      if (latest == null) return null;
+      return hitTs != null && ts >= hitTs ? 1 : latest;
+    }
+
+    function getHitTsBySlug() {
+      const candles = state.dataset?.candles ?? [];
+      const hitTsBySlug = {};
+      for (const market of getActiveMarkets()) {
+        let hitTs = null;
+        for (const candle of candles) {
+          if (market.direction === 'up' && candle.high >= market.threshold) {
+            hitTs = candle.open_time;
+            break;
+          }
+          if (market.direction === 'down' && candle.low <= market.threshold) {
+            hitTs = candle.open_time;
+            break;
+          }
+        }
+        hitTsBySlug[market.market_slug] = hitTs;
+      }
+      return hitTsBySlug;
+    }
+
+    function fmtDate(ts) {
+      return new Date(ts * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function fmtDate24(ts) {
+      const d = new Date(ts * 1000);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mi = String(d.getMinutes()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+    }
+
+    function fmtDay(ts) {
+      return new Date(ts * 1000).toLocaleDateString([], { month: 'short', day: 'numeric' });
+    }
+
+    function fmtPct(value) {
+      return value == null ? 'n/a' : `${(value * 100).toFixed(1)}%`;
+    }
+
+    function fmtUsd(value) {
+      return value == null ? 'n/a' : `$${Math.round(value).toLocaleString()}`;
+    }
+
+    function getActiveMarkets() {
+      const markets = state.dataset?.markets ?? [];
+      if (state.filter === 'all') return markets;
+      return markets.filter(m => m.direction === state.filter);
+    }
+
+    function getActiveCells() {
+      const cells = state.dataset?.heatmap_cells ?? [];
+      if (state.filter === 'all') return cells;
+      return cells.filter(c => c.direction === state.filter);
+    }
+
+    function buildStats() {
+      const dataset = state.dataset;
+      const markets = getActiveMarkets();
+      const thresholds = markets.map(m => m.threshold).filter(Boolean);
+
+      const cards = [
+        ['Event Window', `${dataset.event.startDate.slice(0, 10)} -> ${dataset.event.endDate.slice(0, 10)}`],
+        ['Threshold Span', thresholds.length ? `${fmtUsd(Math.min(...thresholds))} -> ${fmtUsd(Math.max(...thresholds))}` : 'n/a'],
+      ];
+
+      statsEl.innerHTML = cards.map(([label, value]) => `
+        <article class="card">
+          <div class="label">${label}</div>
+          <div class="value ${label === 'Event Window' ? 'nowrap' : ''}">${value}</div>
+        </article>
+      `).join('');
+    }
+
+    function alphaFor(probability) {
+      const p = Math.max(0, Math.min(1, Number(probability) || 0));
+      // Log-scale mapping (lg): better contrast at low probabilities without saturating highs too early.
+      const lg = Math.log10(1 + 99 * p) / Math.log10(100);
+      return 0.06 + lg * 0.86;
+    }
+
+    function draw() {
+      const dataset = state.dataset;
+      if (!dataset || !dataset.candles.length) {
+        tooltip.textContent = 'No candles available.';
+        return;
+      }
+
+      const rect = chart.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      chart.width = Math.floor(rect.width * dpr);
+      chart.height = Math.floor(rect.height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      const width = rect.width;
+      const height = rect.height;
+      const { padding, innerWidth, innerHeight, candles, priceMin, priceMax, xScale, yScale } = getChartMetrics(rect, dataset);
+      const cells = getActiveCells();
+      const thresholds = [...new Set(getActiveMarkets().map(m => m.threshold).filter(v => Number.isFinite(v)))].sort((a, b) => a - b);
+      const marketBands = getMarketBands(getActiveMarkets());
+      const hitTsBySlug = getHitTsBySlug();
+
+      ctx.clearRect(0, 0, width, height);
+
+      cells.forEach(cell => {
+        const band = marketBands[cell.market_slug];
+        if (!band) return;
+        const x0 = xScale(cell.x0);
+        const x1 = xScale(cell.x1);
+        const y0 = yScale(band.upper);
+        const y1 = yScale(band.lower);
+        const rgb = cell.direction === 'up' ? '--up-heat' : '--down-heat';
+        const hitTs = hitTsBySlug[cell.market_slug];
+        const effectiveProbability = (hitTs != null && cell.x0 >= hitTs) ? 1 : cell.probability;
+        const alpha = alphaFor(effectiveProbability);
+        ctx.fillStyle = `rgba(${getComputedStyle(document.documentElement).getPropertyValue(rgb).trim()}, ${alpha})`;
+        ctx.fillRect(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0));
+      });
+
+      // Fill future blank area with each market's latest effective probability.
+      const bucketSeconds = getBucketSeconds();
+      const eventEndTs = parseIsoToTs(dataset.event.endDate);
+      const futureFillStart = (candles.at(-1)?.close_time ?? candles.at(-1)?.open_time ?? eventEndTs) + 1;
+      if (futureFillStart < eventEndTs) {
+        for (const market of getActiveMarkets()) {
+          const band = marketBands[market.market_slug];
+          if (!band) continue;
+          const rgb = market.direction === 'up' ? '--up-heat' : '--down-heat';
+          const hitTs = hitTsBySlug[market.market_slug];
+          const latestBucket = [...market.buckets].reverse().find(item => item.probability != null);
+          const rawLatest = latestBucket?.probability ?? (Array.isArray(market.outcome_prices) ? market.outcome_prices[0] : null);
+          if (rawLatest == null) continue;
+          const effectiveLatest = hitTs != null ? 1 : rawLatest;
+          const alpha = alphaFor(effectiveLatest);
+          const x0 = xScale(futureFillStart);
+          const x1 = xScale(eventEndTs);
+          const y0 = yScale(band.upper);
+          const y1 = yScale(band.lower);
+          ctx.fillStyle = `rgba(${getComputedStyle(document.documentElement).getPropertyValue(rgb).trim()}, ${alpha})`;
+          ctx.fillRect(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0));
+
+          const label = fmtPct(effectiveLatest);
+          const cx = (x0 + x1) / 2;
+          const cy = (y0 + y1) / 2;
+          const boxW = Math.abs(x1 - x0);
+          const boxH = Math.abs(y1 - y0);
+          if (boxW > 36 && boxH > 12) {
+            ctx.font = '12px IBM Plex Mono';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = 'rgba(5, 13, 18, 0.78)';
+            ctx.strokeText(label, cx, cy);
+            ctx.fillStyle = 'rgba(233, 244, 251, 0.96)';
+            ctx.fillText(label, cx, cy);
+          }
+        }
+      }
+
+      const candleWidth = Math.max(3, innerWidth / candles.length * 0.68);
+      candles.forEach((candle, index) => {
+        const x = xScale(candle.open_time + (candle.close_time - candle.open_time) / 2);
+        const openY = yScale(candle.open);
+        const closeY = yScale(candle.close);
+        const highY = yScale(candle.high);
+        const lowY = yScale(candle.low);
+        const rising = candle.close >= candle.open;
+        ctx.strokeStyle = rising ? '#d5f06a' : '#ff8a5b';
+        ctx.fillStyle = rising ? '#d5f06a' : '#ff8a5b';
+        ctx.lineWidth = 1.25;
+        ctx.beginPath();
+        ctx.moveTo(x, highY);
+        ctx.lineTo(x, lowY);
+        ctx.stroke();
+        ctx.fillRect(x - candleWidth / 2, Math.min(openY, closeY), candleWidth, Math.max(2, Math.abs(closeY - openY)));
+
+      });
+
+      thresholds.forEach(threshold => {
+        const y = yScale(threshold);
+        ctx.strokeStyle = 'rgba(121, 154, 176, 0.2)';
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(width - padding.right, y);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(121, 154, 176, 0.08)';
+        ctx.beginPath();
+        ctx.moveTo(width - padding.right, y);
+        ctx.lineTo(width - padding.right + 7, y);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(200, 219, 231, 0.9)';
+        ctx.font = '12px IBM Plex Mono';
+        ctx.textAlign = 'left';
+        ctx.fillText(fmtUsd(threshold), width - padding.right + 10, y + 4);
+      });
+
+      const daySeconds = 86400;
+      for (let ts = parseIsoToTs(dataset.event.startDate); ts <= parseIsoToTs(dataset.event.endDate); ts += daySeconds) {
+        const x = xScale(ts);
+        ctx.strokeStyle = 'rgba(121, 154, 176, 0.08)';
+        ctx.beginPath();
+        ctx.moveTo(x, padding.top);
+        ctx.lineTo(x, height - padding.bottom);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(137, 165, 184, 0.82)';
+        ctx.font = '12px IBM Plex Mono';
+        ctx.textAlign = 'center';
+        ctx.fillText(fmtDay(ts), clamp(x, padding.left + 36, width - padding.right - 36), height - 10);
+      }
+
+      if (state.hoverTs != null) {
+        const x = state.hoverX ?? xScale(state.hoverTs + getBucketSeconds() / 2);
+        const hoverPrice = state.hoverY == null ? candles[Math.max(0, state.hoverIndex ?? candles.length - 1)].close : state.hoverY;
+        const y = yScale(hoverPrice);
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath();
+        ctx.moveTo(x, padding.top);
+        ctx.lineTo(x, height - padding.bottom);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(width - padding.right, y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.beginPath();
+        ctx.fillStyle = 'rgba(255,255,255,0.92)';
+        ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        const label = fmtUsd(hoverPrice);
+        ctx.font = '12px IBM Plex Mono';
+        const tw = ctx.measureText(label).width + 14;
+        const tx = width - padding.right + 8;
+        const ty = y - 11;
+        ctx.fillStyle = 'rgba(5, 13, 18, 0.95)';
+        ctx.strokeStyle = 'rgba(121, 154, 176, 0.35)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.rect(tx, ty, tw, 22);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#e6f1f7';
+        ctx.textAlign = 'left';
+        ctx.fillText(label, tx + 7, y + 4);
+      }
+    }
+
+    function updateTooltip() {
+      const hover = getHoverState();
+      const hoverTs = hover.hoverTs;
+      if (state.hoverX == null) {
+        tooltip.classList.remove('visible');
+      }
+      const hitTsBySlug = getHitTsBySlug();
+      const lineText = (() => {
+        if (!hover.hoveredCell) return 'No matched line';
+        const hitTs = hitTsBySlug[hover.hoveredCell.market_slug];
+        const effectiveProbability = (hitTs != null && hoverTs >= hitTs) ? 1 : hover.hoveredCell.probability;
+        return `<span class="mono">${hover.hoveredCell.direction === 'up' ? '↑' : '↓'} ${hover.hoveredCell.threshold.toLocaleString()}</span> ${fmtPct(effectiveProbability)}`;
+      })();
+
+      tooltip.innerHTML = `
+        <div class="rows">
+          <div><strong>${fmtDate24(hoverTs)}</strong></div>
+          <div>${lineText}</div>
+        </div>
+      `;
+      if (state.hoverX != null) {
+        tooltip.classList.add('visible');
+      }
+    }
+
+    function bindControls() {
+      document.getElementById('controls').addEventListener('click', event => {
+        const button = event.target.closest('button[data-filter]');
+        if (!button) return;
+        state.filter = button.dataset.filter;
+        document.querySelectorAll('#controls button').forEach(btn => btn.classList.toggle('active', btn === button));
+        buildStats();
+        updateTooltip();
+        draw();
+      });
+
+      eventSelectEl.addEventListener('change', async event => {
+        const slug = event.target.value;
+        await reloadForEvent(slug);
+      });
+      eventSelectEl.addEventListener('focus', ensureHistoryOptionsLoaded);
+      eventSelectEl.addEventListener('pointerdown', ensureHistoryOptionsLoaded);
+
+      refreshBtnEl.addEventListener('click', async () => {
+        const slug = state.currentEventSlug || eventSelectEl.value || DEFAULT_EVENT_SLUG;
+        refreshBtnEl.disabled = true;
+        try {
+          await reloadForEvent(slug);
+        } finally {
+          refreshBtnEl.disabled = false;
+        }
+      });
+    }
+
+    function bindHover() {
+      chart.addEventListener('mousemove', event => {
+        const dataset = state.dataset;
+        if (!dataset) return;
+        const rect = chart.getBoundingClientRect();
+        const metrics = getChartMetrics(rect, dataset);
+        const rawX = event.clientX - rect.left;
+        const rawY = event.clientY - rect.top;
+        const x = clamp(rawX, metrics.padding.left, rect.width - metrics.padding.right);
+        const y = clamp(rawY, metrics.padding.top, rect.height - metrics.padding.bottom);
+        const ratio = (x - metrics.padding.left) / (metrics.innerWidth || 1);
+        const absoluteTs = metrics.xMin + clamp(ratio, 0, 1) * (metrics.xMax - metrics.xMin);
+        const bucketSeconds = getBucketSeconds();
+        const hoverTs = Math.floor(absoluteTs / bucketSeconds) * bucketSeconds;
+        let index = metrics.candles.findIndex(candle => candle.open_time <= hoverTs && hoverTs <= candle.close_time);
+        if (index < 0) {
+          index = metrics.candles.reduce((best, candle, candleIndex) => {
+            if (candle.open_time <= hoverTs) return candleIndex;
+            return best;
+          }, -1);
+        }
+        state.hoverIndex = index;
+        state.hoverX = x;
+        state.hoverY = metrics.yInvert(y);
+        state.hoverTs = hoverTs;
+
+        const tooltipWidth = 260;
+        const tooltipHeight = 150;
+        const left = clamp(rawX + 18, 10, rect.width - tooltipWidth - 10);
+        const top = clamp(rawY + 18, 10, rect.height - tooltipHeight - 10);
+        tooltip.style.transform = `translate(${left}px, ${top}px)`;
+        updateTooltip();
+        draw();
+      });
+      chart.addEventListener('mouseleave', () => {
+        state.hoverIndex = null;
+        state.hoverX = null;
+        state.hoverY = null;
+        state.hoverTs = null;
+        tooltip.classList.remove('visible');
+        updateTooltip();
+        draw();
+      });
+      window.addEventListener('resize', draw);
+    }
+
+    async function bootstrap() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const requestedEventSlug = params.get('event');
+        const initialSlug = requestedEventSlug || await resolveLatestEventSlugQuick();
+        setLoading('Loading latest week', 10, true);
+        await reloadForEvent(initialSlug);
+        renderCurrentOnlyOption(state.dataset.event);
+      } catch (error) {
+        chartWrap.innerHTML = `<div class="empty">Failed to load live API data.<br>${String(error)}</div>`;
+        setLoading('Failed', 100, false);
+      }
+    }
+
+    bindControls();
+    bindHover();
+    bootstrap();
+  </script>
+</body>
+</html>

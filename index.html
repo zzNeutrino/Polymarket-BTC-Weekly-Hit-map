@@ -105,11 +105,18 @@
       color: #f1f9cb;
     }
 
+    .stats-row {
+      display: flex;
+      align-items: stretch;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
     .stats {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
-      margin-bottom: 18px;
+      flex: 1;
     }
 
     .card {
@@ -135,6 +142,11 @@
     .card .value.nowrap {
       white-space: nowrap;
       font-size: clamp(14px, 1.35vw, 20px);
+    }
+
+    .card .value.compact-nowrap {
+      white-space: nowrap;
+      font-size: clamp(14px, 1.25vw, 19px);
     }
 
     .chart-wrap {
@@ -176,25 +188,17 @@
     }
 
     .chart-refresh {
-      position: absolute;
-      right: 10px;
-      top: 10px;
-      width: 34px;
-      height: 34px;
-      border-radius: 10px;
+      width: 44px;
+      min-width: 44px;
+      border-radius: 14px;
       border: 1px solid var(--panel-border);
-      background: rgba(5, 13, 18, 0.86);
+      background: rgba(255,255,255,0.03);
       color: var(--text);
       display: grid;
       place-items: center;
-      font-size: 16px;
+      font-size: 18px;
       cursor: pointer;
-      z-index: 3;
-      transition: transform 140ms ease, opacity 140ms ease;
-    }
-
-    .chart-refresh:hover {
-      transform: rotate(20deg);
+      padding: 0;
     }
 
     .chart-refresh:disabled {
@@ -295,6 +299,8 @@
       .topbar { flex-direction: column; }
       .controls { justify-content: flex-start; }
       .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .stats-row { flex-direction: column; }
+      .chart-refresh { width: 100%; min-height: 40px; }
       canvas { height: 62vh; }
     }
 
@@ -321,11 +327,13 @@
       </div>
     </section>
 
-    <section class="stats" id="stats"></section>
+    <section class="stats-row">
+      <section class="stats" id="stats"></section>
+      <button id="refreshBtn" class="chart-refresh" type="button" title="Refresh">↻</button>
+    </section>
 
     <section class="chart-wrap" id="chartWrap">
       <canvas id="chart" width="1400" height="860"></canvas>
-      <button id="refreshBtn" class="chart-refresh" type="button" title="Refresh">↻</button>
       <div class="tooltip" id="tooltip">Loading local JSON…</div>
       <div class="loading" id="loading">
         <div class="row">
@@ -445,9 +453,10 @@
       const toDate = value => {
         const d = new Date(value || '');
         if (Number.isNaN(d.getTime())) return '';
+        const yyyy = String(d.getUTCFullYear());
         const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
         const dd = String(d.getUTCDate()).padStart(2, '0');
-        return `${mm}-${dd}`;
+        return `${yyyy}-${mm}-${dd}`;
       };
       const s = toDate(startDate);
       const e = toDate(endDate || startDate);
@@ -926,6 +935,14 @@
       return value == null ? 'n/a' : `${(value * 100).toFixed(1)}%`;
     }
 
+    function fmtTriggerMove(threshold, referencePrice) {
+      if (!Number.isFinite(threshold) || !Number.isFinite(referencePrice) || referencePrice === 0) return '';
+      const move = threshold - referencePrice;
+      const pct = (move / referencePrice) * 100;
+      const sign = move >= 0 ? '+' : '-';
+      return ` (${sign}${Math.abs(Math.round(move)).toLocaleString()} ${sign}${Math.abs(pct).toFixed(1)}%)`;
+    }
+
     function fmtUsd(value) {
       return value == null ? 'n/a' : `$${Math.round(value).toLocaleString()}`;
     }
@@ -955,7 +972,7 @@
       statsEl.innerHTML = cards.map(([label, value]) => `
         <article class="card">
           <div class="label">${label}</div>
-          <div class="value ${label === 'Event Window' ? 'nowrap' : ''}">${value}</div>
+          <div class="value ${label === 'Threshold Span' ? 'compact-nowrap' : ''}">${value}</div>
         </article>
       `).join('');
     }
@@ -1010,6 +1027,7 @@
       const eventEndTs = parseIsoToTs(dataset.event.endDate);
       const futureFillStart = (candles.at(-1)?.close_time ?? candles.at(-1)?.open_time ?? eventEndTs) + 1;
       if (futureFillStart < eventEndTs) {
+        const referencePrice = candles.at(-1)?.close ?? null;
         for (const market of getActiveMarkets()) {
           const band = marketBands[market.market_slug];
           if (!band) continue;
@@ -1027,13 +1045,14 @@
           ctx.fillStyle = `rgba(${getComputedStyle(document.documentElement).getPropertyValue(rgb).trim()}, ${alpha})`;
           ctx.fillRect(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0));
 
-          const label = fmtPct(effectiveLatest);
+          const pctLabel = fmtPct(effectiveLatest);
+          const label = pctLabel === '100.0%' ? pctLabel : `${pctLabel}${fmtTriggerMove(market.threshold, referencePrice)}`;
           const cx = (x0 + x1) / 2;
           const cy = (y0 + y1) / 2;
           const boxW = Math.abs(x1 - x0);
           const boxH = Math.abs(y1 - y0);
-          if (boxW > 36 && boxH > 12) {
-            ctx.font = '12px IBM Plex Mono';
+          if (boxW > 130 && boxH > 12) {
+            ctx.font = '11px IBM Plex Mono';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.lineWidth = 2;
